@@ -1,7 +1,78 @@
-version: "3.9"
+version: '3.8'
+
 services:
   gui:
     build: ./gui
     ports:
-      - 5000:5000
+      - "5000:5000"
 
+  authentication-service:
+    build: ./authentication-service
+    ports:
+      - "5001:5000"
+    environment:
+      SQLALCHEMY_DATABASE_URI: postgresql://${AUTH_DB_USER}:${AUTH_DB_PASS}@auth-db:5432/${AUTH_DB}
+    depends_on:
+      auth-db:
+        condition: service_healthy
+
+  calendar-service:
+    build: ./calendar-service
+    ports:
+      - "5002:5000"
+    environment:
+      SQLALCHEMY_DATABASE_URI: postgresql://${CAL_DB_USER}:${CAL_DB_PASS}@cal-db:5432/${CAL_DB}
+    depends_on:
+      - cal-db
+
+  event-service:
+    build: ./event-service
+    ports:
+      - "5003:5000"
+    environment:
+      SQLALCHEMY_DATABASE_URI: postgresql://${EVENT_DB_USER}:${EVENT_DB_PASS}@event-db:5432/${EVENT_DB}
+    depends_on:
+      - event-db
+
+  auth-db:
+    image: postgres
+    environment:
+      POSTGRES_USER: ${AUTH_DB_USER}
+      POSTGRES_PASSWORD: ${AUTH_DB_PASS}
+      POSTGRES_DB: ${AUTH_DB}
+    ports:
+      - "5433:5432"
+    volumes:
+      - auth_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${AUTH_DB_USER} -d ${AUTH_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  cal-db:
+    image: postgres
+    environment:
+      POSTGRES_USER: ${CAL_DB_USER}
+      POSTGRES_PASSWORD: ${CAL_DB_PASS}
+      POSTGRES_DB: ${CAL_DB}
+    ports:
+      - "5434:5432"
+    volumes:
+      - cal_postgres_data:/var/lib/postgresql/data
+
+  event-db:
+    image: postgres
+    environment:
+      POSTGRES_USER: ${EVENT_DB_USER}
+      POSTGRES_PASSWORD: ${EVENT_DB_PASS}
+      POSTGRES_DB: ${EVENT_DB}
+    ports:
+      - "5435:5432"
+    volumes:
+      - event_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  auth_postgres_data:
+  cal_postgres_data:
+  event_postgres_data:
