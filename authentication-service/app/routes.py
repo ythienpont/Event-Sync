@@ -1,4 +1,4 @@
-from flask import request, session, jsonify
+from flask import request, jsonify
 from models import User, db
 
 def configure_routes(app):

@@ -2,7 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
 db = SQLAlchemy()
-
+'''
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(100), nullable=False)
@@ -21,3 +21,4 @@ class RSVP(db.Model):
     status = db.Column(db.Enum('Will Attend', 'Maybe', 'Will Not Attend', name='rsvp_status'), default='Maybe', nullable=False)
 
     user = db.relationship('User', backref=db.backref('rsvps', lazy=True))
+'''
