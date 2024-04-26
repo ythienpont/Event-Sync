@@ -29,7 +29,6 @@ def home():
     global username
 
     if username is None:
-        print("Username is none")
         return render_template('login.html', username=username, password=password)
     else:
         # ================================
@@ -83,15 +82,23 @@ def share_page():
 
 @app.route('/share', methods=['POST'])
 def share():
-    share_user = request.form['username']
+    global username
+    if username is None:
+        return redirect('/')
 
-    #========================================
-    # FEATURE (share a calendar with a user)
-    #
-    # Share your calendar with a certain user. Return success = true / false depending on whether the sharing is succesful.
-    #========================================
+    shared = request.form['username']
 
-    success = True  # TODO
+    try:
+        response = requests.post("http://calendar-service:5000/share", json={
+            'owner': username,
+            'shared': shared
+        })
+        success = response.status_code == 200
+    except requests.exceptions.RequestException:
+        success = False
+
+    save_to_session('success', success)
+
     return render_template('share.html', username=username, password=password, success=success)
 
 
@@ -116,25 +123,18 @@ def view_event(eventid):
 
 @app.route("/login", methods=['POST'])
 def login():
-    print('Login called', file=sys.stderr)
     req_username, req_password = request.form['username'], request.form['password']
     try:
-        print(f'{req_username}, {req_password}', file=sys.stderr)
         response = requests.post("http://authentication-service:5000/login", json={
             'username': req_username,
             'password': req_password
         })
-        print('Not failed yet', file=sys.stderr)
         success = response.status_code == 200
-        print(f'status: {success}', file=sys.stderr)
-    except requests.exceptions.RequestException as e:
-        print('Not succesful', file=sys.stderr)
-        print (f'{e}')
+    except requests.exceptions.RequestException:
         success = False
 
     save_to_session('success', success)
     if success:
-        print('Success', file=sys.stderr)
         global username, password
 
         username = req_username
@@ -144,7 +144,6 @@ def login():
 
 @app.route("/register", methods=['POST'])
 def register():
-    print("Register called")
     req_username, req_password = request.form['username'], request.form['password']
     try:
         response = requests.post("http://authentication-service:5000/register", json={

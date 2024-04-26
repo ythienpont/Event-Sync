@@ -2,7 +2,6 @@ from flask_sqlalchemy import SQLAlchemy
 
 db = SQLAlchemy()
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(256))
+class SharedCalendar(db.Model):
+    owner = db.Column(db.String(80), primary_key=True)
+    shared = db.Column(db.String(80), primary_key=True)
