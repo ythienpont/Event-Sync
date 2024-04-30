@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, request, url_for
+from flask import Flask, render_template, redirect, request, url_for, jsonify
 import requests
 import sys
 
@@ -29,34 +29,45 @@ def home():
     global username
 
     if username is None:
-        return render_template('login.html', username=username, password=password)
+        return render_template('login.html')
     else:
-        # ================================
-        # FEATURE (list of public events)
-        #
-        # Retrieve the list of all public events. The webpage expects a list of (title, date, organizer) tuples.
-        # Try to keep in mind failure of the underlying microservice
-        # =================================
+        try:
+            # Assuming the event service is part of the same application
+            response = requests.get("http://event-service:5000/event/public")
+            if response.status_code == 200:
+                public_events = [tuple(event) for event in response.json()]
+            else:
+                public_events = []  # Failed to fetch events, handle accordingly
+        except requests.exceptions.RequestException:
+            public_events = []  # Failed to fetch events, handle accordingly
 
-        public_events = [('Test event', 'Tomorrow', 'Benjamin')]  # TODO: call
-
-        return render_template('home.html', username=username, password=password, events = public_events)
+        return render_template('home.html', username=username, events=public_events)
 
 
 @app.route("/event", methods=['POST'])
 def create_event():
-    title, description, publicprivate, invites = request.form['title'], request.form['description'], request.form['publicprivate'], request.form['invites']
-    #==========================
-    # FEATURE (create an event)
-    #
-    # Given some data, create an event and send out the invites.
-    #==========================
+    title, description, date, publicprivate, invites = request.form['title'], request.form['description'], request.form['date'], request.form['publicprivate'], request.form['invites']
+    try:
+        global username
+        response = requests.post("http://event-service:5000/event", json={
+            'title': title,
+            'description': description,
+            'date': date,
+            'publicprivate': publicprivate,
+            'invites': invites,
+            'organizer': username,
+        })
 
-    return redirect('/')
-
+        if response.status_code == 200:
+            return redirect('/')
+        else:
+            return render_template('create_event.html', title=title, description=description, date=date, publicprivate=publicprivate, invites=invites)
+    except:
+        return render_template('create_event.html', title=title, description=description, date=date, publicprivate=publicprivate, invites=invites)
 
 @app.route('/calendar', methods=['GET', 'POST'])
 def calendar():
+    global username
     calendar_user = request.form['calendar_user'] if 'calendar_user' in request.form else username
 
     # ================================
@@ -65,14 +76,19 @@ def calendar():
     # Retrieve the calendar of a certain user. The webpage expects a list of (id, title, date, organizer, status, Public/Private) tuples.
     # Try to keep in mind failure of the underlying microservice
     # =================================
-
-    success = True # TODO: this might change depending on if the calendar is shared with you
-
-    if success:
-        calendar = [(1, 'Test event', 'Tomorrow', 'Benjamin', 'Going', 'Public')]  # TODO: call
-    else:
+    try:
+        response = requests.post(f"http://calendar-service:5000/calendar/{calendar_user}", json={
+            'caller': username,
+        })
+        if response.status_code == 200:
+            calendar = response.json()
+            success = True 
+        else:
+            calendar = None
+            success = False
+    except:
         calendar = None
-
+        success = False # TODO: this might change depending on if the calendar is shared with you
 
     return render_template('calendar.html', username=username, password=password, calendar_user=calendar_user, calendar=calendar, success=success)
 
@@ -111,13 +127,24 @@ def view_event(eventid):
     # Retrieve additional information for a certain event parameterized by an id. The webpage expects a (title, date, organizer, status, (invitee, participating)) tuples.
     # Try to keep in mind failure of the underlying microservice
     # =================================
+    
+    try:
+        global username
+        response = requests.get(f"http://event-service:5000/event/{eventid}", json={
+            'username': username,
+        })
 
-    success = True # TODO: this might change depending on whether you can see the event (public, or private but invited)
+        success = response.status_code == 200
+        if success:
+            data = response.json()
+            event = [data['title'], data['date'], data['organizer'], data['status'],data['invites']]
+        else:
+            event = None
+    except:
+        success = False 
+        event = None
 
-    if success:
-        event = ['Test event', 'Tomorrow', 'Benjamin', 'Public', [['Benjamin', 'Participating'], ['Fabian', 'Maybe Participating']]]  # TODO: populate this with details from the actual event
-    else:
-        event = None  # No success, so don't fetch the data
+
 
     return render_template('event.html', username=username, password=password, event=event, success = success)
 
@@ -171,22 +198,49 @@ def invites():
     # retrieve a list with all events you are invited to and have not yet responded to
     #==============================
 
-    my_invites = [(1, 'Test event', 'Tomorrow', 'Benjamin', 'Private')] # TODO: process
+    try:
+        global username
+        response = requests.post(f"http://event-service:5000/invites", json={
+            'username': username,
+        })
+
+        success = response.status_code == 200
+        if success:
+            my_invites = [(invite['event_id'], invite['title'], invite['date'], invite['organizer'], invite['privacy']) for invite in response.json().get('invites')]
+        else:
+            my_invites = []
+    except:
+        success = False 
+        my_invites = []
+
     return render_template('invites.html', username=username, password=password, invites=my_invites)
 
 @app.route('/invites', methods=['POST'])
 def process_invite():
-    eventId, status = request.form['event'], request.form['status']
+    eventId = request.form.get('event')
+    status = request.form.get('status')
+    global username
 
-    #=======================
-    # FEATURE (process invite)
-    #
-    # process an invite (accept, maybe, don't accept)
-    #=======================
+    if not eventId or not status:
+        return jsonify({'error': 'Missing event ID or status'}), 400
 
-    pass # TODO: send to microservice
+    try:
+        response = requests.post(f"http://event-service:5000/event/respond{int(eventId)}", json={
+            'username': username,
+            'status': status,
+        })
 
-    return redirect('/invites')
+        if response.status_code == 200:
+            return redirect('/')
+        else:
+            # Log or return detailed response error for debugging
+            return jsonify({
+                'error': 'Failed to update RSVP',
+                'status_code': response.status_code,
+                'response_body': response.json()
+            }), 400
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route("/logout")
 def logout():
