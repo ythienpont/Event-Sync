@@ -97,36 +97,6 @@ def configure_routes(app):
         except Exception as e:
             return jsonify({'error': 'Internal server error'}), 500
 
-
-    @app.route("/event/<int:event_id>/respond/<response>", methods=['POST'])
-    def respond_to_event(event_id, response):
-        # Assume request.json contains the username or other needed data
-
-        req_data = request.get_json()
-        if req_data is None:
-            return jsonify({'error': 'Missing JSON data'}), 400
-        username=req_data['username']
-
-        # Implement logic to record the user's response
-        # For example, update an RSVP record in the database
-        try:
-            event = Event.query.get(event_id)
-            if not event:
-                return jsonify({'error': 'Event not found'}), 404
-
-            # Assuming RSVP is a model that records responses to events
-            rsvp = RSVP.query.filter_by(event_id=event_id, user=username).first()
-            if not rsvp:
-                rsvp = RSVP(event_id=event_id, user=username, status=response)
-            else:
-                rsvp.status = response
-            db.session.add(rsvp)
-            db.session.commit()
-
-            return jsonify({'message': 'Response recorded'}), 200
-        except Exception as e:
-            return jsonify({'error': 'Internal server error', 'details': str(e)}), 500
-
     @app.route('/invites', methods=['GET', 'POST'])
     def invites():
         req_data = request.get_json()
@@ -148,17 +118,27 @@ def configure_routes(app):
 
         return jsonify({'invites': invites_info}), 200
 
-    @app.route('/event/respond/<int:event_id>', methods=['POST'])
+    @app.route('/event/respond/<event_id>', methods=['POST'])
     def update_rsvp(event_id):
+        event_id = int(event_id)
         req_data = request.get_json()
         if not req_data:
             return jsonify({'error': 'Missing JSON data'}), 400
 
         username = req_data.get('username')
         new_status = req_data.get('status')
-        
+
         if not username or not new_status:
             return jsonify({'error': 'Missing required parameters'}), 400
+
+        if new_status == 'Participate':
+            new_status = 'Will Attend'
+        elif new_status == 'Maybe Participate':
+            new_status = 'Maybe'
+        elif new_status == 'Don\'t Participate':
+            new_status = 'Will Not Attend'
+        else:
+            return jsonify({'error': f'Invalid status: {new_status}'}), 400
 
         rsvp = RSVP.query.filter_by(event_id=event_id, username=username).first()
         if rsvp:

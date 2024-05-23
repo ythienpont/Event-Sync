@@ -217,21 +217,25 @@ def invites():
 
 @app.route('/invites', methods=['POST'])
 def process_invite():
-    eventId = request.form.get('event')
-    status = request.form.get('status')
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': f'This is a mistake in the template code'}), 400
+
+    eventId = data.get('event')[0]
+    status = data.get('status')
     global username
 
     if not eventId or not status:
-        return jsonify({'error': 'Missing event ID or status'}), 400
+        return jsonify({'error': f'Missing event ID {eventId} or status {status}'}), 400
 
     try:
-        response = requests.post(f"http://event-service:5000/event/respond{int(eventId)}", json={
+        response = requests.post(f"http://event-service:5000/event/respond/{str(eventId)}", json={
             'username': username,
             'status': status,
         })
 
         if response.status_code == 200:
-            return redirect('/')
+            return redirect('/invites')
         else:
             # Log or return detailed response error for debugging
             return jsonify({
